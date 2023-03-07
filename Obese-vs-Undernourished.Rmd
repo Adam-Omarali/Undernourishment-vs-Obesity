@@ -1,0 +1,98 @@
+---
+title: "An Analysis of the Change in Obesity and Undernourishment"
+output: html_notebook
+---
+
+This project attempts to consider the mean percent increase in adult obesity among wealthy countries to the mean percent decrease in undernourishment among non-wealthy countries over the past five years. 
+
+Note: Adult obesity is used due to limitations in data across all age groups. Further investigation would value clear data to get the total share of obese people by country over the past couple of years.
+
+## Discussion
+
+Our goal is create a sampling distribution of $\bar{x}_{obese} - \bar{x}_{undernourished}$ through simulation. 
+
+**Obesity**
+
+$\bar{x}_{obese}$ will be determined by sampling 30 wealthy countries and collecting the mean change in the share of obese adults over the past five years. The change in share of obese adults is calculated as follows: $x = \frac{ Year\ 5 - Year\ 1}{Year\ 1}*100\%$.
+
+A country is deemed wealthy if it's GDP per capita is greater than $22,000 for the most recent year in the data (2020).
+
+```{r}
+gdp <- read.csv('data/GDP.csv')
+gdp <- gdp[gdp$Year == 2020, ] #select the most recent year
+gdp <- gdp[gdp$Entity != "", ] #remove the world entry since we only care about countries
+gdpThreshold <- quantile(gdp$GDP, 0.5) # get the fifty percentile value
+#other option for determining wealthy countries
+wealthyCountries <- gdp[gdp$GDP >= gdpThreshold, ]["Entity"] # get all wealthy country names
+nonWealthyCountries <- gdp[gdp$GDP < gdpThreshold, ]["Entity"]
+gdpThreshold
+
+wealthyCountries <- gdp[gdp$GDP >= 22000, ]["Entity"]
+nonWealthyCountries <- gdp[gdp$GDP < 22000, ]["Entity"]
+hist(gdp$GDP, xlab="GDP per Capita", main="Histogram of GDP per Capita")
+```
+
+### Sampling
+Now we must randomly sample (SRS) thirty countries from each list.
+
+```{r}
+seed(123)
+wealthySample <- sample(wealthyCountries$Entity, size=30)
+nonWealthySample <- sample(nonWealthyCountries$Entity, size=30)
+```
+Next we can find the mean percent change in Our data is limited by obesity so we will consider the year 2011 as Year 1 and 2016 as Year 5. Let's define a function to return the mean and standard deviation for both obese and undernourished data.
+```{r}
+getChange <- function (df, sampleCountries, statisticName, label) {
+  sample <- df[df$Entity %in% sampleCountries, ] #select all countries in the sample
+  sample <- sample[sample$Year %in% c(2011, 2016), ] #select only years 2011 2016
+  sample <- split(sample[statisticName], sample$Entity) #group rows by country
+  sample <- sapply(sample, function(x) ((x[[statisticName]][2]-x[[statisticName]][1])/x[[statisticName]][1])*100) #calculate percentage change for each country
+  hist(sample, xlab=label, main=paste("Histogram of", label))
+  paste("mean: ", mean(sample), " sd: ", sd(sample))
+  data.frame(mean= mean(sample), sd = sd(sample))
+}
+```
+
+```{r}
+obese <- read.csv('data/adults-obese.csv')
+obeseStats <- getChange(obese, wealthySample, 'ShareObese', "Percent Change in Share of Obese Adults")
+```
+The same can be done for undernourishment data.
+```{r}
+undernourishment <- read.csv('data/undernourishment.csv')
+undernourishmentStats <- getChange(undernourishment, nonWealthySample, 'ShareUndernourished', "Percent Change in Share of Undernourished People")
+```
+
+Now we can simulate a sampling distribution by generating random values with the normal distribution using each sample's mean and standard deviation. The standard deviation can be used since the sample size n ≥ 30, given by the large count condition for means.
+
+```{r}
+set.seed(123)
+obeseMeans <- rnorm(n=150, mean=obeseStats$mean, sd=obeseStats$sd)
+undernourishedMeans <- rnorm(n=150, mean=undernourishmentStats$mean, sd=undernourishmentStats$sd)
+
+differences <- obeseMeans - undernourishedMeans
+hist(differences, main="Difference of Means", xlab=expression(paste(bar(x)[obese], " - ", bar(x)[undernourished])))
+meanSamplingDist <- obeseStats$mean-undernourishmentStats$mean
+sdSamplingDist <- sqrt((obeseStats$sd)^2/150+(undernourishmentStats$sd)^2/150)
+pnorm(0, mean=meanSamplingDist, sd=sdSamplingDist, lower.tail = FALSE)
+pnorm(0, mean=mean(differences), sd=sd(differences), lower.tail = FALSE)
+
+```
+```{r}
+set.seed(123)
+obeseMeans <- rnorm(n=150, mean=obeseStats$mean, sd=obeseStats$sd)
+undernourishedMeans <- rnorm(n=150, mean=undernourishmentStats$mean, sd=undernourishmentStats$sd) * -1
+
+differences <- obeseMeans - undernourishedMeans
+hist(differences, main="Difference of Means", xlab=expression(paste(bar(x)[obese], " - ", bar(x)[undernourished])))
+meanSamplingDist <- obeseStats$mean-undernourishmentStats$mean
+sdSamplingDist <- sqrt((obeseStats$sd)^2/150+(undernourishmentStats$sd)^2/150)
+pnorm(0, mean=meanSamplingDist, sd=sdSamplingDist, lower.tail = FALSE)
+pnorm(0, mean=mean(differences), sd=sd(differences), lower.tail = FALSE)
+
+```
+
+## Sources
+Hannah Ritchie and Max Roser (2017) - "Obesity". Published online at OurWorldInData.org. Retrieved from: 'https://ourworldindata.org/obesity' [Online Resource]
+
+Max Roser and Hannah Ritchie (2019) - "Hunger and Undernourishment". Published online at OurWorldInData.org. Retrieved from: 'https://ourworldindata.org/hunger-and-undernourishment' [Online Resource]
